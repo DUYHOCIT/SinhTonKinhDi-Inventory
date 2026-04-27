@@ -1,3 +1,5 @@
+LƯU Ý khi muốn chạy dự án phải tự thêm các thư mục gốc của dự án góc nhìn thứ 3 trừ file đã có 
+
 # 🎮 Git Guide — Unreal Engine 5 · C++ · Assets
 
 > Hướng dẫn đầy đủ Git cho dự án game: source code C++, Blueprint, asset UE5.  
