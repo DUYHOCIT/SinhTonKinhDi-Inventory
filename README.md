@@ -10,7 +10,6 @@ LƯU Ý khi muốn chạy dự án phải tự thêm các thư mục gốc của
 ## 📌 Mục lục
 
 - [⚡ Cheatsheet — Lệnh hằng ngày](#-cheatsheet--lệnh-hằng-ngày)
-- [🔧 Setup lần đầu](#-setup-lần-đầu)
 - [🌿 Branch](#-branch)
 - [📦 Staging & Commit](#-staging--commit)
 - [⬆️ Push / Pull / Sync](#️-push--pull--sync)
@@ -55,8 +54,6 @@ git branch -D ten-branch               # Xóa branch local
 ```
 
 ---
-
-## 🔧 Setup lần đầu
 
 ### Cài đặt & kiểm tra
 
