@@ -4,6 +4,7 @@
 #include "Inventory/Component/InventoryComponent.h"
 #include "Inventory/Item/ItemBase.h"
 #include "Inventory/Widget/ItemWidget.h"
+#include "Inventory/Widget/InformationWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 
@@ -34,36 +35,36 @@ void UInventoryGirdWidget::NativeConstruct()
 		BorderSlot->SetSize(FVector2D(Columns * TileSize, Rows * TileSize));
 
 	BuildLineSegments();
-	InventoryComp->SetInventoryGridWidget(this);
+
+	// Đăng ký đúng slot theo GridCategory — mỗi grid instance tự quản lý category riêng
+	InventoryComp->SetInventoryGridWidget(this, GridCategory);
 	SetIsFocusable(true);
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  Xây đường kẻ grid (chỉ gọi 1 lần)
+//  Grid lines (built once)
 // ─────────────────────────────────────────────────────────────────
 
 void UInventoryGirdWidget::BuildLineSegments()
 {
 	StartX.Reset(); StartY.Reset(); EndX.Reset(); EndY.Reset();
 
-	// Đường dọc (Columns+1 đường)
 	for (int32 i = 0; i <= Columns; ++i)
 	{
 		const float X = i * TileSize;
-		StartX.Add(X);  StartY.Add(0.f);
-		EndX.Add(X);    EndY.Add(Rows * TileSize);
+		StartX.Add(X); StartY.Add(0.f);
+		EndX.Add(X);   EndY.Add(Rows * TileSize);
 	}
-	// Đường ngang (Rows+1 đường)
 	for (int32 j = 0; j <= Rows; ++j)
 	{
 		const float Y = j * TileSize;
-		StartX.Add(0.f);            StartY.Add(Y);
+		StartX.Add(0.f);              StartY.Add(Y);
 		EndX.Add(Columns * TileSize); EndY.Add(Y);
 	}
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  Vẽ đường kẻ
+//  Paint grid lines
 // ─────────────────────────────────────────────────────────────────
 
 int32 UInventoryGirdWidget::NativePaint(
@@ -74,9 +75,9 @@ int32 UInventoryGirdWidget::NativePaint(
 	LayerId = Super::NativePaint(Args, Geo, Cull, Elements, LayerId, Style, bEnabled);
 	if (!GirdBorder || StartX.IsEmpty()) return LayerId;
 
-	FPaintContext Ctx(Geo, Cull, Elements, LayerId, Style, bEnabled);
-	const FLinearColor LineColor(0.5f, 0.5f, 0.5f, 0.5f);
-	const FVector2D    Offset = GirdBorder->GetCachedGeometry()
+	FPaintContext       Ctx(Geo, Cull, Elements, LayerId, Style, bEnabled);
+	const FLinearColor  LineColor(0.5f, 0.5f, 0.5f, 0.5f);
+	const FVector2D     Offset = GirdBorder->GetCachedGeometry()
 		.GetLocalPositionAtCoordinates(FVector2D::ZeroVector);
 
 	for (int32 i = 0; i < StartX.Num(); ++i)
@@ -92,7 +93,7 @@ int32 UInventoryGirdWidget::NativePaint(
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  Refresh widget
+//  Refresh — chỉ hiển thị item thuộc GridCategory của grid này
 // ─────────────────────────────────────────────────────────────────
 
 void UInventoryGirdWidget::Refresh()
@@ -102,18 +103,15 @@ void UInventoryGirdWidget::Refresh()
 
 	GirdCanvasPanel->ClearChildren();
 
-	for (auto& [Item, Tile] : InventoryComp->GetAllItems())
+	// Lấy đúng danh sách item của category này (kho riêng biệt)
+	for (auto& [Item, Tile] : InventoryComp->GetItemsForCategory(GridCategory))
 	{
 		if (!IsValid(Item)) continue;
 
 		UItemWidget* W = CreateWidget<UItemWidget>(GetWorld(), CharacterRef->ItemWidgetClass);
 		if (!W) continue;
 
-		UItemWidget* iw = Cast<UItemWidget>(W);
-		if (iw)
-		{
-			iw->GirdWidget = this;
-		}
+		W->GirdWidget = this;
 		W->SetOwningPlayer(GetOwningPlayer());
 		W->Refresh(Item, InventoryComp);
 
@@ -127,40 +125,73 @@ void UInventoryGirdWidget::Refresh()
 	}
 }
 
+// ─────────────────────────────────────────────────────────────────
+//  Item selection + hiển thị InformationWidget
+// ─────────────────────────────────────────────────────────────────
+
 void UInventoryGirdWidget::SetItemSelected(UItemWidget* NewSelected)
 {
 	ItemSelected = NewSelected;
+
+	if (!InventoryComp || !InventoryComp->InformationWidgetRef) return;
+
+	UInformationWidget* InfoWidget = InventoryComp->InformationWidgetRef;
+
+	if (NewSelected && IsValid(NewSelected->GetItem()))
+	{
+		AItemBase* SelectedItem = NewSelected->GetItem();
+		InfoWidget->setInformation(SelectedItem->GetName(), SelectedItem->GetDescription());
+		InfoWidget->SetVisibility(ESlateVisibility::Visible);
+	}
+	else
+	{
+		InfoWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UInventoryGirdWidget::SetNullItemSelected()
 {
 	ItemSelected = nullptr;
+
+	// Ẩn InformationWidget khi bỏ chọn
+	if (InventoryComp && InventoryComp->InformationWidgetRef)
+		InventoryComp->InformationWidgetRef->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  Drag over — tính tile top-left của item đang kéo
+//  Drag Over
 // ─────────────────────────────────────────────────────────────────
 
 bool UInventoryGirdWidget::NativeOnDragOver(const FGeometry& InGeo,
-	const FDragDropEvent& InDDE,
-	UDragDropOperation* InOp)
+	const FDragDropEvent& InDDE, UDragDropOperation* InOp)
 {
 	if (!InOp || !InOp->Payload) return false;
 
 	DraggedItem = Cast<AItemBase>(InOp->Payload);
 	if (!DraggedItem) return false;
 
-	const FVector2D GridOffset = GirdBorder->GetCachedGeometry().GetLocalPositionAtCoordinates(FVector2D::ZeroVector);
-	const FVector2D AdjustedPos = InGeo.AbsoluteToLocal(InDDE.GetScreenSpacePosition()) - GridOffset;
+	// Chỉ cho kéo item đúng category vào grid này
+	if (DraggedItem->ItemCategory != GridCategory)
+	{
+		DraggedItem = nullptr;
+		return false;
+	}
 
-	// Căn chỉnh half-tile để cursor ở giữa item
+	const FVector2D GridOffset = GirdBorder->GetCachedGeometry()
+		.GetLocalPositionAtCoordinates(FVector2D::ZeroVector);
+	const FVector2D AdjustedPos =
+		InGeo.AbsoluteToLocal(InDDE.GetScreenSpacePosition()) - GridOffset;
+
 	const FMousePositionInTile InTile = GetMousePositionInTile(AdjustedPos);
 	const FIntPoint HalfDim(
 		InTile.Right ? DraggedItem->GetDimensions().X - 1 : DraggedItem->GetDimensions().X,
 		InTile.Down ? DraggedItem->GetDimensions().Y - 1 : DraggedItem->GetDimensions().Y
 	);
 
-	DraggedItemTopLeftTile = FIntPoint(FMath::TruncToInt(AdjustedPos.X / TileSize), FMath::TruncToInt(AdjustedPos.Y / TileSize)) - HalfDim / 2;
+	DraggedItemTopLeftTile = FIntPoint(
+		FMath::TruncToInt(AdjustedPos.X / TileSize),
+		FMath::TruncToInt(AdjustedPos.Y / TileSize)
+	) - HalfDim / 2;
 
 	return true;
 }
@@ -170,10 +201,8 @@ bool UInventoryGirdWidget::NativeOnDragOver(const FGeometry& InGeo,
 // ─────────────────────────────────────────────────────────────────
 
 bool UInventoryGirdWidget::NativeOnDrop(const FGeometry& InGeo,
-	const FDragDropEvent& InDDE,
-	UDragDropOperation* InOp)
+	const FDragDropEvent& InDDE, UDragDropOperation* InOp)
 {
-	// Reset trạng thái hiển thị
 	DraggedItem = nullptr;
 
 	if (!InOp || !InOp->Payload || !InventoryComp) return false;
@@ -181,17 +210,29 @@ bool UInventoryGirdWidget::NativeOnDrop(const FGeometry& InGeo,
 	DroppedItem = Cast<AItemBase>(InOp->Payload);
 	if (!DroppedItem) return false;
 
+	// ── Từ chối item không đúng category — trả về vị trí gốc ────
+	if (DroppedItem->ItemCategory != GridCategory)
+	{
+		const int32 OriginalIndex = InventoryComp->OriginalDragStartIndex;
+		if (OriginalIndex != -1)
+			InventoryComp->AddItemAt(DroppedItem, OriginalIndex);
+
+		DroppedItem = nullptr;
+		StoredDragOp = nullptr;
+		InventoryComp->OriginalDragStartIndex = -1;
+		InventoryComp->DraggedItem_Internal = nullptr;
+		return true; // consume event — tránh spawn ra world
+	}
+
 	const int32 OriginalIndex = InventoryComp->OriginalDragStartIndex;
 	const int32 TargetIndex = InventoryComp->TileToIndex(DraggedItemTopLeftTile);
 
-	// --- Thử thả vào vị trí mới ---
 	if (InventoryComp->IsRoomAvaiable(DroppedItem, TargetIndex))
 	{
 		InventoryComp->AddItemAt(DroppedItem, TargetIndex);
 		goto Cleanup;
 	}
 
-	// --- Vị trí mới không hợp lệ: trả về vị trí gốc ---
 	if (OriginalIndex != -1)
 	{
 		if (InventoryComp->IsRoomAvaiable(DroppedItem, OriginalIndex))
@@ -200,13 +241,11 @@ bool UInventoryGirdWidget::NativeOnDrop(const FGeometry& InGeo,
 			goto Cleanup;
 		}
 
-		// Vị trí gốc không vừa vì đã xoay → xoay lại rồi thêm
 		DroppedItem->RotateItem();
 		InventoryComp->AddItemAt(DroppedItem, OriginalIndex);
 		goto Cleanup;
 	}
 
-	// Không thể xử lý → trả false để InventoryWidget bắt
 	DroppedItem = nullptr;
 	StoredDragOp = nullptr;
 	InventoryComp->OriginalDragStartIndex = -1;
@@ -222,19 +261,18 @@ Cleanup:
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  Drag enter — lưu operation để dùng khi nhấn R
+//  Drag Enter
 // ─────────────────────────────────────────────────────────────────
 
 void UInventoryGirdWidget::NativeOnDragEnter(const FGeometry& InGeo,
-	const FDragDropEvent& InDDE,
-	UDragDropOperation* InOp)
+	const FDragDropEvent& InDDE, UDragDropOperation* InOp)
 {
 	Super::NativeOnDragEnter(InGeo, InDDE, InOp);
 	StoredDragOp = InOp;
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  Phím R = xoay item đang kéo
+//  Key: Tab = đóng kho, R = xoay item đang kéo
 // ─────────────────────────────────────────────────────────────────
 
 FReply UInventoryGirdWidget::NativeOnPreviewKeyDown(const FGeometry& InGeo,
@@ -242,48 +280,45 @@ FReply UInventoryGirdWidget::NativeOnPreviewKeyDown(const FGeometry& InGeo,
 {
 	if (InKey.GetKey() == EKeys::Tab)
 	{
-		if (DraggedItem || StoredDragOp)
-		{
-			AItemBase* Item = DraggedItem;
+		const bool bIsDragging = (DraggedItem != nullptr || StoredDragOp != nullptr
+			|| (InventoryComp && InventoryComp->DraggedItem_Internal != nullptr));
 
-			int32 OriginalIndex = -1;
-			if (InventoryComp)
-			{
-				OriginalIndex = InventoryComp->OriginalDragStartIndex;
-			}
+		if (bIsDragging && InventoryComp)
+		{
+			AItemBase* ItemBeingDragged = InventoryComp->DraggedItem_Internal;
+			const int32 OrigGridIndex = InventoryComp->OriginalDragStartIndex;
+			const int32 OrigToolSlotIndex = InventoryComp->OriginalToolSlotIndex;
 
 			UWidgetBlueprintLibrary::CancelDragDrop();
 
-			if (Item && InventoryComp && OriginalIndex != -1)
+			if (IsValid(ItemBeingDragged))
 			{
-				InventoryComp->AddItemAt(Item, OriginalIndex);
+				if (OrigToolSlotIndex != -1)
+					InventoryComp->EquipToolAt(ItemBeingDragged, OrigToolSlotIndex);
+				else if (OrigGridIndex != -1)
+					InventoryComp->AddItemAt(ItemBeingDragged, OrigGridIndex);
 			}
-			DraggedItem = nullptr;
-			StoredDragOp = nullptr;
 
-			if (InventoryComp)
-			{
-				InventoryComp->OriginalDragStartIndex = -1;
-				InventoryComp->DraggedItem_Internal = nullptr;
-			}
+			InventoryComp->OriginalDragStartIndex = -1;
+			InventoryComp->OriginalToolSlotIndex = -1;
+			InventoryComp->DraggedItem_Internal = nullptr;
 		}
 
-		if (CharacterRef)
-		{
-			CharacterRef->ToggleInventory();
-		}
+		DraggedItem = nullptr;
+		StoredDragOp = nullptr;
 
+		if (CharacterRef) CharacterRef->ToggleInventory();
 		return FReply::Handled();
 	}
+
 	if (InKey.GetKey() == EKeys::R && DraggedItem && StoredDragOp)
 	{
 		DraggedItem->RotateItem();
-
 		if (UItemWidget* Visual = Cast<UItemWidget>(StoredDragOp->DefaultDragVisual))
 			Visual->Refresh(DraggedItem, InventoryComp);
-
 		return FReply::Handled();
 	}
+
 	return Super::NativeOnPreviewKeyDown(InGeo, InKey);
 }
 
@@ -294,7 +329,7 @@ FReply UInventoryGirdWidget::NativeOnMouseButtonDown(const FGeometry& InGeo,
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  Helper
+//  Helpers
 // ─────────────────────────────────────────────────────────────────
 
 FMousePositionInTile UInventoryGirdWidget::GetMousePositionInTile(FVector2D LocalPos) const
@@ -307,5 +342,6 @@ FMousePositionInTile UInventoryGirdWidget::GetMousePositionInTile(FVector2D Loca
 
 bool UInventoryGirdWidget::IsRoomAvailableAt(AItemBase* Item, FIntPoint TopLeft) const
 {
-	return IsValid(Item) && InventoryComp && InventoryComp->IsRoomAvaiable(Item, InventoryComp->TileToIndex(TopLeft));
+	return IsValid(Item) && InventoryComp &&
+		InventoryComp->IsRoomAvaiable(Item, InventoryComp->TileToIndex(TopLeft));
 }

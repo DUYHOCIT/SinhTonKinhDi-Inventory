@@ -21,21 +21,24 @@ class SINHTONKINHDI_API UItemWidget : public UUserWidget
 public:
 	/** Cập nhật hình ảnh + kích thước widget theo item. */
 	void Refresh(AItemBase* InItem, UInventoryComponent* InInventory);
+
+	/** Trả về item đang được đại diện (dùng bởi InformationWidget). */
+	FORCEINLINE AItemBase* GetItem() const { return Item; }
+
 	UInventoryGirdWidget* GirdWidget = nullptr;
+
 protected:
 	UPROPERTY(meta = (BindWidget)) UCanvasPanel* Canvas;
-	UPROPERTY(meta = (BindWidget)) USizeBox* BackgroundSize;
-	UPROPERTY(meta = (BindWidget)) UBorder* BackgroundBorder;
-	UPROPERTY(meta = (BindWidget)) UImage* ItemImage;
+	UPROPERTY(meta = (BindWidget)) USizeBox*     BackgroundSize;
+	UPROPERTY(meta = (BindWidget)) UBorder*      BackgroundBorder;
+	UPROPERTY(meta = (BindWidget)) UImage*       ItemImage;
 
-	UPROPERTY() AItemBase* Item = nullptr;
+	UPROPERTY() AItemBase*          Item      = nullptr;
 	UPROPERTY() UInventoryComponent* Inventory = nullptr;
 
-	virtual void NativeOnMouseEnter(const FGeometry&, const FPointerEvent&) override;
-	virtual void NativeOnMouseLeave(const FPointerEvent&) override;
-	virtual void NativeOnDragDetected(const FGeometry&, const FPointerEvent&, UDragDropOperation*&) override;
+	virtual void   NativeOnMouseEnter(const FGeometry&, const FPointerEvent&) override;
+	virtual void   NativeOnMouseLeave(const FPointerEvent&) override;
+	virtual void   NativeOnDragDetected(const FGeometry&, const FPointerEvent&, UDragDropOperation*&) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry&, const FPointerEvent&) override;
-	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent);
-
-
+	virtual FReply NativeOnMouseButtonUp(const FGeometry&, const FPointerEvent&) override;
 };

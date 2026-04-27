@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Inventory/InventoryDataStructs.h"
 #include "ItemBase.generated.h"
 
 class UStaticMeshComponent;
@@ -17,6 +18,8 @@ class SINHTONKINHDI_API AItemBase : public AActor
 public:
 	AItemBase();
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item")
+    EItemCategory ItemCategory = EItemCategory::Other;
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	UStaticMeshComponent* Mesh;
 
@@ -42,6 +45,8 @@ public:
 	FText GetName();
 
 	FText GetDescription() const { return Description; }
+
+	void OnEquipped();
 protected:
 	virtual void BeginPlay() override;
 

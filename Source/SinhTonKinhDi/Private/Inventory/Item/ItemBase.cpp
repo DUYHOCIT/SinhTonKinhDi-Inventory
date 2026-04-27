@@ -54,3 +54,9 @@ FText AItemBase::GetName()
 {
 	return Name;
 }
+
+void AItemBase::OnEquipped()
+{
+	SetActorEnableCollision(false);
+	Mesh->SetSimulatePhysics(false);
+}

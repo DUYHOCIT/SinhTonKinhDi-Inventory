@@ -17,10 +17,19 @@ USTRUCT()
 struct FMousePositionInTile
 {
 	GENERATED_USTRUCT_BODY();
-	// ✅ Fix C26495: khởi tạo giá trị mặc định
 	FMousePositionInTile() : Right(false), Down(false) {}
 	bool Right;
 	bool Down;
+};
+
+UENUM(BlueprintType)
+enum class EItemCategory : uint8
+{
+	// "Tất cả" tab bị xoá → thay bằng "Trang bị"
+	Equipment UMETA(DisplayName = "Trang bị"),
+	Tool      UMETA(DisplayName = "Công cụ"),
+	Food      UMETA(DisplayName = "Đồ ăn"),
+	Other     UMETA(DisplayName = "Đồ khác")
 };
 
 class SINHTONKINHDI_API InventoryDataStructs

@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -7,7 +7,6 @@
 #include "Logging/LogMacros.h"
 #include "SinhTonKinhDiCharacter.generated.h"
 
-class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
@@ -18,6 +17,7 @@ class AActor;
 class AItemBase;
 class UInventoryGirdWidget;
 class UNotificationPanel;
+class UChildActorComponent;
 struct FTimerHandle;
 struct FInputActionValue;
 
@@ -27,10 +27,6 @@ UCLASS(config=Game)
 class ASinhTonKinhDiCharacter : public ACharacter
 {
 	GENERATED_BODY()
-
-	/** Camera boom positioning the camera behind the character */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Camera, meta = (AllowPrivateAccess = "true"))
-	USpringArmComponent* CameraBoom;
 
 	/** Follow camera */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Camera, meta = (AllowPrivateAccess = "true"))
@@ -58,12 +54,22 @@ class ASinhTonKinhDiCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* PickUp;
 
+	/**
+	 * Input Action cho lăn chuột đổi slot tool.
+	 * Tạo IA_ScrollTool trong editor: loại Axis1D (float),
+	 * mapping: Mouse Wheel Axis (hoặc MouseScrollUp +1 / MouseScrollDown -1).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* ScrollToolSlotAction;
+
 public:
 	ASinhTonKinhDiCharacter();
 
 	UPROPERTY(EditAnywhere)
 	UInventoryComponent* InventoryComponent;
 	void ToggleInventory();
+
+
 protected:
 
 	/** Called for movement input */
@@ -72,18 +78,24 @@ protected:
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
 			
-	
+	void UpdateFocus(float DeltaTime);
 
 	UFUNCTION()
 	void PickUpItem();
-	
+
+	/** Lăn chuột → đổi slot tool đang active */
+	void OnScrollToolSlot(const FInputActionValue& Value);
+
 	APlayerController* GetPlayerController;
+
 protected:
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	
 	// To add mapping context
 	virtual void BeginPlay();
+
+	void Tick(float DeltaSeconds) override;
 
 	UPROPERTY()
 	AItemBase* ItemTemp;
@@ -93,12 +105,8 @@ protected:
 
 	void LineTraceForItems();
 	FTimerHandle TraceHandle;
-	
 
 public:
-	/** Returns CameraBoom subobject **/
-	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
-	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
 	UPROPERTY(EditAnywhere, Category = "UI")
@@ -112,5 +120,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "UI")
 	TSubclassOf<UUserWidget> ItemWidgetClass;
 	UUserWidget* ItemWidget;
-};
 
+	UPROPERTY(EditAnywhere)
+	UChildActorComponent* WeaponChild;
+};

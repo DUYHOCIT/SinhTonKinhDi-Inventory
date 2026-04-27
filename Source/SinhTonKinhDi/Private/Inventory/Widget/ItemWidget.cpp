@@ -21,12 +21,9 @@ void UItemWidget::Refresh(AItemBase* InItem, UInventoryComponent* InInventory)
 
 	if (!Item || !Inventory || !ItemImage || !BackgroundSize) return;
 
-	// Chọn icon theo trạng thái xoay
 	UMaterialInterface* Icon = Item->GetIsRotated() ? Item->GetRotatedIcon() : Item->GetIcon();
-	if (Icon)
-		ItemImage->SetBrushFromMaterial(Icon);
+	if (Icon) ItemImage->SetBrushFromMaterial(Icon);
 
-	// Kích thước widget
 	const FVector2D Size(
 		Item->GetDimensions().X * Inventory->TileSize,
 		Item->GetDimensions().Y * Inventory->TileSize
@@ -38,7 +35,6 @@ void UItemWidget::Refresh(AItemBase* InItem, UInventoryComponent* InInventory)
 	if (UCanvasPanelSlot* ImageSlot = UWidgetLayoutLibrary::SlotAsCanvasSlot(ItemImage))
 		ImageSlot->SetSize(Size);
 }
-
 
 // ─────────────────────────────────────────────────────────────────
 //  Mouse hover
@@ -72,22 +68,18 @@ void UItemWidget::NativeOnDragDetected(const FGeometry& InGeometry,
 		return;
 	}
 
-	// --- Lưu vị trí gốc TRƯỚC KHI xoá khỏi grid ---
-	TMap<AItemBase*, FIntPoint> AllItems = Inventory->GetAllItems();
+	// Lưu vị trí gốc — tìm trong kho đúng category của item
+	TMap<AItemBase*, FIntPoint> AllItems = Inventory->GetItemsForCategory(Item->ItemCategory);
 	if (FIntPoint* OriginalTile = AllItems.Find(Item))
-	{
 		Inventory->OriginalDragStartIndex = Inventory->TileToIndex(*OriginalTile);
-	}
 	else
-	{
 		Inventory->OriginalDragStartIndex = -1;
-	}
+
 	Inventory->DraggedItem_Internal = Item;
 
-	// Xoá khỏi grid KHÔNG Destroy — item actor vẫn còn sống
+	// Xoá khỏi grid (item actor vẫn còn sống)
 	Inventory->RemoveFromGrid(Item);
 
-	// Tạo drag operation
 	UDragDropOperation* DragOp = NewObject<UDragDropOperation>();
 	DragOp->DefaultDragVisual = this;
 	DragOp->Payload = Item;
@@ -101,19 +93,18 @@ FReply UItemWidget::NativeOnMouseButtonDown(
 	const FPointerEvent& InMouseEvent)
 {
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
-	{
 		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
-	}
 
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
-FReply UItemWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+FReply UItemWidget::NativeOnMouseButtonUp(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
 {
 	UE_LOG(LogTemp, Warning, TEXT("MouseUp Item"));
 	if (GirdWidget && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
-	{
 		GirdWidget->SetItemSelected(this);
-	}
+
 	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
 }
